@@ -1,0 +1,29 @@
+################################################################################
+# (c0) energy calibration parameter g0 :
+    - adc * g0 = energy
+
+# (c1) slope correction parameters g1, g2 :
+    - energy_left  = adc_left * g1
+    - energy_right = adc_right * g2
+
+# (c2) balistic correction parameters b0, b1, b2 :
+    - x = c1_rpos
+    - c2_esum = c1_esum(x) * source_energy / (b0 + b1*x + b2*x*x) 
+
+# (c2) balistic correction parameters b0, b1, b2 :
+    - x = c1_rpos
+    - c2_esum = c1_esum(x) * source_energy / (b0 + b1*x + b2*x*x) 
+
+# note that initial input is ../data/stark_xxxx.reco.root created from run_reco.C
+
+# order of macros
+vi si_calibration.h               # to fix fRun and fDataType
+root make_histograms.C            # output = data/stark*.hist.root
+root run_energy_correction.C      # output = data/stark*.c0.root        containing c0 correction parameters
+root run_slope_correction.C       # output = data/stark*.c1.root        containing c1 correction parameters
+root run_ohmic_correlation.C      # output = data/stark*.ce.root        containing ce correction parameters
+root make_c1_histograms.C         # output = data/stark*.hist_c1.root   containing c0, c1 corrected histograms
+root run_ballistic_correction.C   # output = data/stark*.c2.root        containing c2 correction parameters
+root make_c2_histograms.C         # output = data/stark*.hist_c2.root   containing c2 corrected histograms
+root summary.C\(199,303\)         # to check result
+################################################################################

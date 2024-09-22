@@ -1,95 +1,128 @@
 #include "si_calibration.h"
-#include "energy_calibration.h"
 
-TH1D* histEnergy        [fNumDetectors][2][fNumStrips];
-TH1D* histEnergySum     [fNumDetectors][2][fNumStrips];
-TH2D* histLeftRight     [fNumDetectors][2][fNumStrips];
-TH2D* histEnergyPosition[fNumDetectors][2][fNumStrips];
 TH2D* histEnergyDetector[2][2];
 TH2D* histEnergyDetectorAll[2];
 
-double g0Array[40][2][8];
-double g1Array[40][2][8];
-double g2Array[40][2][8];
-double b0Array[40][2][8];
-double b1Array[40][2][8];
-double b2Array[40][2][8];
-double resolutionArray[40][2][8];
+double c0Array[40][2][8][2];    // ohmic energy calibration
+double c1Array[40][2][8][2][2]; // junction slope correction
+double c2Array[40][2][8][3];    // junction ballistic correction
+double c3Array[40][2][8][2];    // junction energy calibration
+double cpArray[40][2][8][2][5]; // junction postion parameters
 
-void check(int det=0, bool drawFigures=true);
+//double g0Array[40][2][8];
+//double g1Array[40][2][8];
+//double g2Array[40][2][8];
+//double b0Array[40][2][8];
+//double b1Array[40][2][8];
+//double b2Array[40][2][8];
+//double resolutionArray[40][2][8];
+
+std::vector<double> fEnergyResolutionArray[40][2];
+std::vector<double> fNumberOfEntiresArray[40][2];
+
+void detector_summary(int det=0, bool drawFigures=true);
 void get_parameters();
 void write_parameters();
 
-void summary(int run1=199, int run2=303)
+LKDrawingGroup* fTop;
+LKDrawingGroup* fGroupEE;
+LKDrawingGroup* fGroupEP;
+LKDrawingGroup* fGroupOthers;
+TH2D* fHistER[2];
+TH1D* fHistNE[2];
+
+int fRun1, fRun2;
+
+void summary()
 {
-    TString calName = "c2_";
+    fRun1 = 199;
+    fRun2 = 168;
+
+    TString nameSummary = Form("data/stark_%d_%d.summary.root",fRun1,fRun2);
+    if (true) {
+        fTop = new LKDrawingGroup(nameSummary);
+        fTop -> Draw("v");
+        return;
+    }
+
+    fTop = new LKDrawingGroup("top");
+    TString calName = "c3_";
 
     for (auto det=0; det<40; ++det)
         for (auto side=0; side<2; ++side)
             for (auto strip=0; strip<8; ++strip) {
-                g0Array[det][side][strip] = 0;
-                g1Array[det][side][strip] = 0;
-                g2Array[det][side][strip] = 0;
-                b0Array[det][side][strip] = 0;
-                b1Array[det][side][strip] = 0;
-                b2Array[det][side][strip] = 0;
+                c0Array[det][side][strip][0] = 0;
+                c0Array[det][side][strip][1] = 0;
+                c1Array[det][side][strip][0][0] = 0;
+                c1Array[det][side][strip][0][1] = 0;
+                c1Array[det][side][strip][1][0] = 0;
+                c1Array[det][side][strip][1][1] = 0;
+                c2Array[det][side][strip][0] = 0;
+                c2Array[det][side][strip][1] = 0;
+                c2Array[det][side][strip][2] = 0;
+                c3Array[det][side][strip][0] = 0;
+                c3Array[det][side][strip][1] = 0;
+                for (auto i=0; i<5; ++i) cpArray[det][side][strip][0][i] = 0;
+                for (auto i=0; i<5; ++i) cpArray[det][side][strip][1][i] = 0;
             }
 
     /////////////////////////////////////////////////////////////////////
-    // 199
+    // 1
     /////////////////////////////////////////////////////////////////////
-    if (run1>0)
+    if (fRun1>0)
     {
-        MakeRun(run1);
+        MakeRun(fRun1);
         get_parameters();
-        auto file1 = new TFile(Form("data/stark_0%d.hist_c2.root",fRun),"read");
-        auto set1 = (LKDrawingSet*) file1 -> Get("DrawingSet");
+        auto top1 = new LKDrawingGroup(Form("data/stark_0%d.hist_c3.root",fRun));
         for (auto dss : fStripArrayS)
         {
             if (ContinueRegardingToDataType(dss.det)) continue;
-            histEnergy[dss.det][dss.side][dss.strip] = (TH1D*) set1 -> FindHist((MakeHistName(calName+"energy","",dss.det,dss.side,dss.strip,-1));
+            auto name = MakeHistName(calName+"energy","",dss.det,dss.side,dss.strip);
+            fHistEnergy[dss.det][dss.side][dss.strip] = (TH1D*) top1 -> FindHist(name);
         }
         for (auto dss : fStripArrayR)
         {
             if (ContinueRegardingToDataType(dss.det)) continue;
-            histEnergySum     [dss.det][dss.side][dss.strip] = (TH1D*) set1 -> FindHist((MakeHistName(calName+"esum",             "",dss.det,dss.side,dss.strip,-1));
-            histLeftRight     [dss.det][dss.side][dss.strip] = (TH2D*) set1 -> FindHist((MakeHistName(calName+"left",calName+"right",dss.det,dss.side,dss.strip,-1));
-            histEnergyPosition[dss.det][dss.side][dss.strip] = (TH2D*) set1 -> FindHist((MakeHistName(calName+"rpos",calName+"esum", dss.det,dss.side,dss.strip,-1));
+            fHistEnergySum     [dss.det][dss.side][dss.strip] = (TH1D*) top1 -> FindHist(MakeHistName(calName+"esum",             "",dss.det,dss.side,dss.strip));
+            fHistLeftRight     [dss.det][dss.side][dss.strip] = (TH2D*) top1 -> FindHist(MakeHistName(calName+"left",calName+"right",dss.det,dss.side,dss.strip));
+            fHistEnergyPosition[dss.det][dss.side][dss.strip] = (TH2D*) top1 -> FindHist(MakeHistName(calName+"rpos",calName+"esum", dss.det,dss.side,dss.strip));
         }
-        histEnergyDetector[0][0] = (TH2D*) set1 -> FindHist((MakeHistName("det_j",calName+"esum",-1,0,-1,-1));
-        histEnergyDetector[0][1] = (TH2D*) set1 -> FindHist((MakeHistName("det_o",calName+"esum",-1,1,-1,-1));
+        histEnergyDetector[0][0] = (TH2D*) top1 -> FindHist(MakeHistName("det_j",calName+"esum",-1,0,-1,-1));
+        histEnergyDetector[0][1] = (TH2D*) top1 -> FindHist(MakeHistName("det_o",calName+"esum",-1,1,-1,-1));
     }
 
     /////////////////////////////////////////////////////////////////////
-    // 303
+    // 2
     /////////////////////////////////////////////////////////////////////
-    if (run2>0)
+    if (fRun2>0)
     {
-        MakeRun(run2);
+        MakeRun(fRun2);
         get_parameters();
-        auto file2 = new TFile(Form("data/stark_0%d.hist_c2.root",fRun),"read");
-        auto set2 = (LKDrawingSet*) file2 -> Get("DrawingSet");
+        auto top2 = new LKDrawingGroup(Form("data/stark_0%d.hist_c3.root",fRun));
         for (auto dss : fStripArrayS)
         {
             if (ContinueRegardingToDataType(dss.det)) continue;
-            histEnergy[dss.det][dss.side][dss.strip] = (TH1D*) set2 -> FindHist((MakeHistName(calName+"energy","",dss.det,dss.side,dss.strip,-1));
+            fHistEnergy[dss.det][dss.side][dss.strip] = (TH1D*) top2 -> FindHist(MakeHistName(calName+"energy","",dss.det,dss.side,dss.strip));
         }
         for (auto dss : fStripArrayR)
         {
             if (ContinueRegardingToDataType(dss.det)) continue;
-            histEnergySum     [dss.det][dss.side][dss.strip] = (TH1D*) set2 -> FindHist((MakeHistName(calName+"esum",             "",dss.det,dss.side,dss.strip,-1));
-            histLeftRight     [dss.det][dss.side][dss.strip] = (TH2D*) set2 -> FindHist((MakeHistName(calName+"left",calName+"right",dss.det,dss.side,dss.strip,-1));
-            histEnergyPosition[dss.det][dss.side][dss.strip] = (TH2D*) set2 -> FindHist((MakeHistName(calName+"rpos",calName+"esum", dss.det,dss.side,dss.strip,-1));
+            fHistEnergySum     [dss.det][dss.side][dss.strip] = (TH1D*) top2 -> FindHist(MakeHistName(calName+"esum",             "",dss.det,dss.side,dss.strip));
+            fHistEnergyPosition[dss.det][dss.side][dss.strip] = (TH2D*) top2 -> FindHist(MakeHistName(calName+"rpos",calName+"esum", dss.det,dss.side,dss.strip));
         }
-        histEnergyDetector[1][0] = (TH2D*) set2 -> FindHist((MakeHistName("det_j",calName+"esum",-1,0,-1,-1));
-        histEnergyDetector[1][1] = (TH2D*) set2 -> FindHist((MakeHistName("det_o",calName+"esum",-1,1,-1,-1));
+        histEnergyDetector[1][0] = (TH2D*) top2 -> FindHist(MakeHistName("det_j",calName+"esum",-1,0,-1,-1));
+        histEnergyDetector[1][1] = (TH2D*) top2 -> FindHist(MakeHistName("det_o",calName+"esum",-1,1,-1,-1));
     }
+
+    GetC3Parameters("data/compare_168_with_199.c3.dat");
 
     /////////////////////////////////////////////////////////////////////
     // merge hit pattern
     /////////////////////////////////////////////////////////////////////
     histEnergyDetectorAll[0] = (TH2D*) histEnergyDetector[0][0] -> Clone("h0");
     histEnergyDetectorAll[1] = (TH2D*) histEnergyDetector[0][1] -> Clone("h1");
+    histEnergyDetectorAll[0] -> SetTitle(Form("[%d,%d] Junction",fRun1,fRun2));
+    histEnergyDetectorAll[1] -> SetTitle(Form("[%d,%d] Ohmic",fRun1,fRun2));
     histEnergyDetectorAll[0] -> Add(histEnergyDetector[1][0]);
     histEnergyDetectorAll[1] -> Add(histEnergyDetector[1][1]);
     histEnergyDetectorAll[0] -> SetStats(0);
@@ -105,24 +138,77 @@ void summary(int run1=199, int run2=303)
         histEnergyDetectorAll[0] -> GetXaxis() -> SetBinLabel(det*fNumJStrips+1,Form("%d (%s,%s)",det,name.Data(),sring.Data()));
         histEnergyDetectorAll[1] -> GetXaxis() -> SetBinLabel(det*fNumOStrips+1,Form("%d (%s,%s)",det,name.Data(),sring.Data()));
     }
-    auto cvs = MakeCanvas("cvs_energy_detector",2);
-    auto pad1 = cvs -> cd(1); pad1 -> SetMargin(0.1,0.12,0.18,0.1); histEnergyDetectorAll[0] -> Draw("colz");
-    auto pad2 = cvs -> cd(2); pad2 -> SetMargin(0.1,0.12,0.18,0.1); histEnergyDetectorAll[1] -> Draw("colz");
-    cvs -> SaveAs(Form("figures/%s.png",cvs->GetName()));
+    for (auto jo : {0,1})
+    {
+        auto group = fTop -> CreateGroup(Form("HP%d",jo));
+        auto drawing = group -> CreateDrawing();
+        drawing -> Add(histEnergyDetectorAll[jo]);
+        auto x2 = (drawing->GetMainHist()) -> GetXaxis() -> GetXmax();
+        auto line1 = new TLine(0,fGateEnergy[0],x2,fGateEnergy[0]);
+        auto line2 = new TLine(0,fGateEnergy[1],x2,fGateEnergy[1]);
+        line1 -> SetLineColor(kRed);
+        line2 -> SetLineColor(kRed);
+        drawing -> Add(line1);
+        drawing -> Add(line2);
+        drawing -> SetLogz();
+    }
+    fGroupOthers = fTop -> CreateGroup("Others");
+    fGroupEE = fTop -> CreateGroup("Energy");
+    fGroupEP = fTop -> CreateGroup("EvsP");
 
     /////////////////////////////////////////////////////////////////////
-    // Write parameters
+    // 
     /////////////////////////////////////////////////////////////////////
-    for (auto i=0; i<40; ++i) check(i,false);
+
+    fHistER[0] = (TH2D*) MakeHitPatternHist(2,"resolution0",50,0,10);
+    fHistER[0] -> SetTitle(Form("[%d,%d] Energy Resolution Junction",fRun1,fRun2));
+    fHistER[0] -> GetYaxis() -> SetTitle("energy resolution (sigma/mean) [%]");
+    fHistER[0] -> SetStats(0);
+    fGroupOthers -> AddHist(fHistER[0]);
+
+    fHistER[1] = (TH2D*) MakeHitPatternHist(2,"resolution1",50,0,10);
+    fHistER[1] -> SetTitle(Form("[%d,%d] Energy Resolution Ohmic",fRun1,fRun2));
+    fHistER[1] -> GetYaxis() -> SetTitle("energy resolution (sigma/mean) [%]");
+    fHistER[1] -> SetStats(0);
+    fGroupOthers -> AddHist(fHistER[1]);
+
+    fHistNE[0] = (TH1D*) MakeDet1DHist(0,"mult0");
+    fHistNE[0] -> SetTitle(Form("[%d,%d] Multiplicity Junction",fRun1,fRun2));
+    fHistNE[0] -> GetYaxis() -> SetTitle("");
+    fHistNE[0] -> SetStats(0);
+    fGroupOthers -> AddHist(fHistNE[0]);
+
+    fHistNE[1] = (TH1D*) MakeDet1DHist(1,"mult1");
+    fHistNE[1] -> SetTitle(Form("[%d,%d] Multiplicity Ohmic",fRun1,fRun2));
+    fHistNE[1] -> GetYaxis() -> SetTitle("");
+    fHistNE[1] -> SetStats(0);
+    fGroupOthers -> AddHist(fHistNE[1]);
+
+    for (auto det=0; det<40; ++det) {
+        detector_summary(det,false);
+    }
+
     write_parameters();
-    //for (auto i=0; i<10; ++i) check(i,true);
-    //for (auto i=32; i<38; ++i) check(i,true);
+
+    for (auto det=0; det<40; ++det)
+    {
+        for (auto resolution : fEnergyResolutionArray[det][0]) fHistER[0] -> Fill(det,resolution);
+        for (auto resolution : fEnergyResolutionArray[det][1]) fHistER[1] -> Fill(det,resolution);
+    }
+
+    fTop -> Draw("v");
+
+    auto file = new TFile(nameSummary,"recreate");
+    fTop -> Write();
+    e_info << nameSummary << endl;
 }
 
-void check(int det, bool drawFigures)
+void detector_summary(int det, bool drawFigures)
 {
+    auto subEE = fGroupEE -> CreateGroup(Form("E%d",det));
+    auto subEP = fGroupEP -> CreateGroup(Form("EP%d",det));
     /////////////////////////////////////////////////////////////////////
-    // create group
+    // create info
     /////////////////////////////////////////////////////////////////////
     strip_group dssArrayR;
     strip_group dssArrayS;
@@ -148,197 +234,195 @@ void check(int det, bool drawFigures)
     }
 
     /////////////////////////////////////////////////////////////////////
-    // create canvas
+    // t
     /////////////////////////////////////////////////////////////////////
-    auto spectrum = new TSpectrum(fNumGates*2);
-
-    auto fitAndDraw = [drawFigures,spectrum](strip_info dss, TH1D* hist)
-    {
-        auto lg = new TLegend(0.35,0.75,0.80,0.88);
-        lg -> SetBorderSize(0);
-        lg -> SetFillStyle(0);
-        TF1 *fits[2];
-        fits[0] = nullptr;
-        fits[1] = nullptr;
-        double x1=-999, x2=-999;
-        double m1=-999, m2=-999;
-        double s1=-999, s2=-999;
-        if (hist->GetEntries()>fEntriesCut)
-        {
-            auto numPeaks = spectrum -> Search(hist,5,"goff nodraw");
-            double* xPeaks = spectrum -> GetPositionX();
-            if (xPeaks[1]<xPeaks[0]) {
-                auto xx = xPeaks[1];
-                xPeaks[1] = xPeaks[0];
-                xPeaks[0] = xx;
-            }
-            for (auto iPeak=0; iPeak<fNumGates; ++iPeak)
-            {
-                if (iPeak+1>numPeaks) {
-                    e_warning << hist -> GetName() << " (" << dss.det << ", " << dss.side << ", " << dss.strip << ") : " << " #peaks = " << numPeaks << " #entries = " << hist -> GetEntries() << endl;
-                    continue;
-                }
-                double xPeak = xPeaks[iPeak];
-                fits[iPeak] = new TF1(Form("fitGaus_%d_%d_%d_%d",dss.det,dss.side,dss.strip,iPeak),"gaus(0)",0,6000);
-                auto fit = fits[iPeak];
-                fit -> SetRange(xPeak-5*xPeak*fExpectedResolution,xPeak+5*xPeak*fExpectedResolution);
-                fit -> SetParameters(hist->GetBinContent(hist->FindBin(xPeak)),xPeak,xPeak*fExpectedResolution);
-                hist -> Fit(fit,"Q0NR");
-                auto amp = fit -> GetParameter(0);
-                auto mean = fit -> GetParameter(1);
-                auto sigma = fit -> GetParameter(2);
-                fit -> SetRange(mean-2.5*sigma,mean+2.5*sigma);
-                if (dss.det==34||dss.det==35||dss.det==36)
-                    fit -> SetRange(mean-.8*sigma,mean+2.5*sigma);
-                hist -> Fit(fit,"Q0NR");
-                amp = fit -> GetParameter(0);
-                mean = fit -> GetParameter(1);
-                sigma = fit -> GetParameter(2);
-                if (iPeak==0) { x1 = mean - 20*sigma; m1 = mean; s1 = sigma; }
-                if (iPeak==1) { x2 = mean + 20*sigma; m2 = mean; s2 = sigma; }
-                //fit -> SetRange(mean-2.5*sigma,mean+2.5*sigma);
-                lg -> AddEntry((TObject*)nullptr,Form("mean_{%d} = %.3f",iPeak,mean),"");
-            }
-            resolutionArray[dss.det][dss.side][dss.strip] = 100*s1/m1;
-        }
-        if (drawFigures)
-        {
-            if (x1>-998&&x2>-998)
-                hist -> GetXaxis() -> SetRangeUser(x1,x2);
-            hist -> Draw();
-            for (auto iPeak=0; iPeak<fNumGates; ++iPeak) {
-                if (fits[iPeak]!=nullptr)
-                    fits[iPeak] -> Draw("samel");
-            }
-            lg -> Draw("same");
-        }
-    };
-
-    /////////////////////////////////////////////////////////////////////
-    // create canvas
-    /////////////////////////////////////////////////////////////////////
-    int icvs = 1;
-    TCanvas *cvs = nullptr;
-    if (drawFigures) {
-        cvs = dssArrayS.MakeGroupCanvas(Form("summary_det%d",det),20);
-        for (auto dss : dssArrayR.array) { cvs -> cd(icvs++); histEnergyPosition[dss.det][dss.side][dss.strip] -> Draw("colz"); }
+    double sr1 = 2.5;
+    double sr2 = 2.5;
+    int rebin = 1;
+    if (det>=32) {
+        sr1 = 2.0;
+        sr2 = 2.5;
+    }
+    if (det==34||det==35) {
+        sr1 = 0.5;
+        sr2 = 2.5;
+        rebin = 4;
     }
 
     for (auto dss : dssArrayR.array)
     {
-        if (drawFigures) cvs -> cd(icvs++);
-        auto hist = histEnergySum[dss.det][dss.side][dss.strip];
-        fitAndDraw(dss,hist);
-    }
-
-    for (auto dss : dssArrayS.array)
-    {
-        if (drawFigures) cvs -> cd(icvs++);
-        auto hist = histEnergy[dss.det][dss.side][dss.strip];
-        fitAndDraw(dss,hist);
-    }
-
-    if (drawFigures) cvs -> SaveAs(Form("figures/%s.png",cvs->GetName()));
-}
-
-void get_parameters()
-{
-    int det, side, strip;
-    double entries, g0, g1, g2, b0, b1, b2;
-
-    auto fpar0 = new TFile(fC0ParFileName,"read");
-    auto tree0 = (TTree*) fpar0 -> Get("parameters");
-    tree0 -> SetBranchAddress("det"    ,&det    );
-    tree0 -> SetBranchAddress("side"   ,&side   );
-    tree0 -> SetBranchAddress("strip"  ,&strip  );
-    tree0 -> SetBranchAddress("g0"     ,&g0     );
-    auto n0 = tree0 -> GetEntries();
-    for (auto i=0; i<n0; ++i) {
-        tree0 -> GetEntry(i);
-        g0Array[det][side][strip] = g0;
-    }
-    fpar0 -> Close();
-
-    auto fpar1 = new TFile(fC1ParFileName,"read");
-    auto tree1 = (TTree*) fpar1 -> Get("parameters");
-    tree1 -> SetBranchAddress("det"    ,&det    );
-    tree1 -> SetBranchAddress("side"   ,&side   );
-    tree1 -> SetBranchAddress("strip"  ,&strip  );
-    tree1 -> SetBranchAddress("g1"     ,&g1     );
-    tree1 -> SetBranchAddress("g2"     ,&g2     );
-    auto n1 = tree1 -> GetEntries();
-    for (auto i=0; i<n1; ++i) {
-        tree1 -> GetEntry(i);
-        g1Array[det][side][strip] = g1;
-        g2Array[det][side][strip] = g2;
-    }
-    fpar1 -> Close();
-
-    auto fpar2 = new TFile(fC2ParFileName,"read");
-    auto tree2 = (TTree*) fpar2 -> Get("parameters");
-    tree2 -> SetBranchAddress("det"    ,&det    );
-    tree2 -> SetBranchAddress("side"   ,&side   );
-    tree2 -> SetBranchAddress("strip"  ,&strip  );
-    tree2 -> SetBranchAddress("b0"     ,&b0     );
-    tree2 -> SetBranchAddress("b1"     ,&b1     );
-    tree2 -> SetBranchAddress("b2"     ,&b2     );
-    auto n2 = tree2 -> GetEntries();
-    for (auto i=0; i<n2; ++i) {
-        tree2 -> GetEntry(i);
-        b0Array[det][side][strip] = b0;
-        b1Array[det][side][strip] = b1;
-        b2Array[det][side][strip] = b2;
-    }
-    fpar2 -> Close();
-}
-
-void write_parameters()
-{
-    int det, side, strip;
-    double entries, g0, g1, g2, b0, b1, b2, resolution;
-    auto fpar = new TFile(fAllParFileName,"recreate");
-
-    (new TParameter<double>("calibration_energy",f241AmAlphaEnergy1)) -> Write();;
-
-    auto tree = new TTree("parameters","all (c0,c1,c2)");
-    tree -> Branch("det"    ,&det    );
-    tree -> Branch("side"   ,&side   );
-    tree -> Branch("strip"  ,&strip  );
-    tree -> Branch("g1"     ,&g1     );
-    tree -> Branch("g2"     ,&g2     );
-    tree -> Branch("g0"     ,&g0     );
-    tree -> Branch("b0"     ,&b0     );
-    tree -> Branch("b1"     ,&b1     );
-    tree -> Branch("b2"     ,&b2     );
-    tree -> Branch("resolution",&resolution);
-
-    for (auto vv : {fAllGroupArrayR, fAllGroupArrayS})
-    {
-        for (auto dssGroup : vv)
-        {
-            for (auto dss : dssGroup.array)
-            {
-                det = dss.det;
-                side = dss.side;
-                strip = dss.strip;
-                //////////////////////////////
-                double user_gain = 1.;
-                g0 = user_gain * g0Array[det][side][strip];
-                g1 = user_gain * g1Array[det][side][strip];
-                g2 = user_gain * g2Array[det][side][strip];
-                b0 = user_gain * b0Array[det][side][strip];
-                b1 = user_gain * b1Array[det][side][strip];
-                b2 = user_gain * b2Array[det][side][strip];
-                //////////////////////////////
-                resolution = resolutionArray[det][side][strip];
-                tree -> Fill();
+        auto drawingEP = subEP -> CreateDrawing();
+        auto histEP = fHistEnergyPosition[dss.det][dss.side][dss.strip];
+        drawingEP -> Add(histEP);
+        auto line1 = new TLine(-1,fGateEnergy[0],1,fGateEnergy[0]);
+        auto line2 = new TLine(-1,fGateEnergy[1],1,fGateEnergy[1]);
+        line1 -> SetLineColor(kRed);
+        line2 -> SetLineColor(kRed);
+        drawingEP -> Add(line1);
+        drawingEP -> Add(line2);
+        for (auto gate=0; gate<fNumGates; ++gate) {
+            for (auto os=0; os<fNumOStrips+1; ++os) {
+                double energy = fGateEnergy[gate];
+                double y1 = energy - 0.3;
+                double y2 = energy + 0.3;
+                drawingEP -> Add(new TLine(fCPParameters[dss.det][dss.side][dss.strip][gate][os],y1,fCPParameters[dss.det][dss.side][dss.strip][gate][os],y2));
+            }
+        }
+        for (auto os=0; os<fNumOStrips+1; ++os) {
+            double x1 = fCPParameters[dss.det][dss.side][dss.strip][0][os];
+            double y1 = fGateEnergy[0];
+            double x2 = fCPParameters[dss.det][dss.side][dss.strip][1][os];
+            double y2 = fGateEnergy[1];
+            if (abs(x2-x1)>0) {
+                auto f1 = new TF1("f1",Form("%f*(x-%f)+%f",(y2-y1)/(x2-x1),x1,y1),-1,1);
+                f1 -> SetLineColor(kBlack);
+                f1 -> SetLineWidth(1);
+                f1 -> SetLineStyle(2);
+                drawingEP -> Add(f1);
             }
         }
     }
 
-    fpar -> cd();
-    tree -> Write();
-    tree -> Print("toponly");
-    cout << fpar -> GetName() << endl;
-    fpar -> Close();
+    for (auto dss : dssArrayR.array)
+    {
+        auto hist = (TH1D*) fHistEnergyPosition[dss.det][dss.side][dss.strip] -> ProjectionY();
+        {
+            auto histNE = fHistNE[dss.side];
+            auto bin = histNE -> FindBin(dss.det*(dss.side==0?fNumJStrips:fNumOStrips)+dss.strip);
+            auto ne = hist -> GetEntries();
+            histNE -> SetBinContent(bin,ne);
+        }
+        auto drawing = FitEnergyAndMakeDrawing(hist, 2, sr1, sr2);
+        subEE -> AddDrawing(drawing);
+        for (auto i=0; i<2; ++i) {
+            auto fit = (TF1*) drawing -> FindObject(Form("fit%d",i));
+            if (fit==nullptr) continue;
+            auto resolution = 100*fit->GetParameter(2)/fit->GetParameter(1);
+            fEnergyResolutionArray[det][dss.side].push_back(resolution);
+        }
+    }
+
+    for (auto dss : dssArrayS.array)
+    {
+        auto hist = fHistEnergy[dss.det][dss.side][dss.strip];
+        {
+            auto histNE = fHistNE[dss.side];
+            auto bin = histNE -> FindBin(dss.det*(dss.side==0?fNumJStrips:fNumOStrips)+dss.strip);
+            auto ne = hist -> GetEntries();
+            histNE -> SetBinContent(bin,ne);
+        }
+        if (rebin>1) hist -> Rebin(rebin);
+        auto drawing = FitEnergyAndMakeDrawing(hist, 2, sr1, sr2);
+        subEE -> AddDrawing(drawing);
+        for (auto i=0; i<2; ++i) {
+            auto fit = (TF1*) drawing -> FindObject(Form("fit%d",i));
+            if (fit==nullptr) continue;
+            auto resolution = 100*fit->GetParameter(2)/fit->GetParameter(1);
+            fEnergyResolutionArray[det][dss.side].push_back(resolution);
+        }
+    }
+}
+
+void get_parameters()
+{
+    GetC0Parameters();
+    GetC1Parameters();
+    GetC2Parameters();
+    GetC3Parameters();
+    GetCPParameters();
+}
+
+void write_parameters()
+{
+    TString name1 = Form("data/stark_%d_%d.calibration.dat",fRun1,fRun2);
+    e_info << name1 << endl;
+    ofstream file1(name1);
+    file1
+        << "#det"   << "\t"
+        << "side"   << "\t"
+        << "strip"  << "\t"
+        << "c0_itcpt" << "\t"
+        << "c0_slope" << "\t"
+        << "c1_itcptL" << "\t"
+        << "c1_slopeL" << "\t"
+        << "c1_itcptR" << "\t"
+        << "c1_slopeR" << "\t"
+        << "c2_par0"   << "\t" 
+        << "c2_par1"   << "\t" 
+        << "c2_par2"   << "\t"
+        << "c3_itcpt" << "\t"
+        << "c3_slope" << endl;
+
+    TString name2 = Form("data/stark_%d_%d.position.dat",fRun1,fRun2);
+    e_info << name2 << endl;
+    ofstream file2(name2);
+    file2
+        << "#det"   << "\t"
+        << "side"   << "\t"
+        << "strip"  << "\t"
+        << "x00"    << "\t"
+        << "x01"    << "\t"
+        << "x02"    << "\t"
+        << "x03"    << "\t"
+        << "x04"    << "\t"
+        << "x10"    << "\t"
+        << "x11"    << "\t"
+        << "x12"    << "\t"
+        << "x13"    << "\t"
+        << "x14"    << endl;
+
+    for (auto groupArray : {fAllGroupArrayR, fAllGroupArrayS})
+    {
+        for (auto dssGroup : groupArray)
+        {
+            for (auto dss : dssGroup.array)
+            {
+                int det = dss.det;
+                int side = dss.side;
+                int strip = dss.strip;
+                file1
+                    << det   << "\t" 
+                    << side  << "\t" 
+                    << strip << "\t" 
+                    << fC0Parameters[det][side][strip][0] << "\t"
+                    << fC0Parameters[det][side][strip][1] << "\t"
+                    << fC1Parameters[det][side][strip][0][0] << "\t"
+                    << fC1Parameters[det][side][strip][0][1] << "\t"
+                    << fC1Parameters[det][side][strip][1][0] << "\t"
+                    << fC1Parameters[det][side][strip][1][1] << "\t"
+                    << fC2Parameters[det][side][strip][0] << "\t"
+                    << fC2Parameters[det][side][strip][1] << "\t"
+                    << fC2Parameters[det][side][strip][2] << "\t"
+                    << fC3Parameters[det][side][strip][0] << "\t"
+                    << fC3Parameters[det][side][strip][1] << endl;
+            }
+        }
+    }
+
+    for (auto dssGroup : fAllGroupArrayR)
+    {
+        for (auto dss : dssGroup.array)
+        {
+            int det = dss.det;
+            int side = dss.side;
+            int strip = dss.strip;
+            file2
+                << det   << "\t" 
+                << side  << "\t" 
+                << strip << "\t" 
+                << fCPParameters[det][side][strip][0][0] << "\t"
+                << fCPParameters[det][side][strip][0][1] << "\t"
+                << fCPParameters[det][side][strip][0][2] << "\t"
+                << fCPParameters[det][side][strip][0][3] << "\t"
+                << fCPParameters[det][side][strip][0][4] << "\t"
+                << fCPParameters[det][side][strip][1][0] << "\t"
+                << fCPParameters[det][side][strip][1][1] << "\t"
+                << fCPParameters[det][side][strip][1][2] << "\t"
+                << fCPParameters[det][side][strip][1][3] << "\t"
+                << fCPParameters[det][side][strip][1][4] << endl;
+        }
+    }
+
+    file1.close();
+    file2.close();
 }

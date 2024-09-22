@@ -1,47 +1,45 @@
 #include "si_calibration.h"
-#include "energy_calibration.h"
 
-void run_energy_calibration(int run=-1, bool drawExample=true)
+void run_energy_calibration(bool runViewer=true)
 {
-    MakeRun(run);
+    MakeRun();
+    auto top = new LKDrawingGroup(Form("run_%d",fRun));
 
     /////////////////////////////////////////////////////////////////////
     // 1) Get histograms
     /////////////////////////////////////////////////////////////////////
-    auto fileHist = new TFile(fHistFileName,"read");
-    auto setInput = (LKDrawingSet*) fileHist -> Get("DrawingSet");
-    for (auto dss : fStripArrayS) {
-        //fHistEnergy[dss.det][dss.side][dss.strip] = (TH1D*) fileHist -> Get(MakeHistName("energy","",dss.det,dss.side,dss.strip));
-        fHistEnergy[dss.det][dss.side][dss.strip] = (TH1D*) setInput -> FindHist(MakeHistName("energy","",dss.det,dss.side,dss.strip));
+    auto drawings = new LKDrawingGroup(fHistFileName,"Energy:HPJ:HPO");
+    drawings -> Print();
+    for (auto dss : fStripArrayS)
+    {
+        fHistEnergy[dss.det][dss.side][dss.strip] = (TH1D*) drawings -> FindHist(MakeHistName("energy","",dss.det,dss.side,dss.strip));
     }
+    top -> AddGroup(drawings -> FindGroup("HPJ"));
+    top -> AddGroup(drawings -> FindGroup("HPO"));
 
+    lk_debug << endl;
     /////////////////////////////////////////////////////////////////////
     // 2) Calculate energy calibration parameter
     /////////////////////////////////////////////////////////////////////
-    int det, side, strip;
+    //int det, side, strip;
+    lk_debug << endl;
     double entries, a1, m1, s1, a2, m2, s2, g0;
-    auto fout = new TFile(fC0ParFileName,"recreate");
-    auto tree = new TTree("parameters","energy calibration parameter g0: adc * g0 = energy");
-    tree -> Branch("det"    ,&det    );
-    tree -> Branch("side"   ,&side   );
-    tree -> Branch("strip"  ,&strip  );
-    tree -> Branch("entries",&entries);
-    tree -> Branch("a1"     ,&a1     );
-    tree -> Branch("m1"     ,&m1     );
-    tree -> Branch("s1"     ,&s1     );
-    tree -> Branch("a2"     ,&a2     );
-    tree -> Branch("m2"     ,&m2     );
-    tree -> Branch("s2"     ,&s2     );
-    tree -> Branch("g0"     ,&g0     );
+    StartWriteC0Parameters();
     double gausParameters[40][2][8][3][3] = {0}; // det, strip, gate, range
-    auto spectrum = new TSpectrum(fMaxPeaks);
+    auto spectrum = new TSpectrum(fNumGates);
     TF1 *fitGaus = new TF1("fitGaus","gaus(0)",0,6000);
     for (auto dss : fStripArrayS)
     {
-        det = dss.det;
-        side = dss.side;
-        strip = dss.strip;
-        auto hist = fHistEnergy[det][side][strip];
+        //det = dss.det;
+        //side = dss.side;
+        //strip = dss.strip;
+        auto hist = fHistEnergy[dss.det][dss.side][dss.strip];
+        fGraphEnergyFit[dss.det][dss.side][dss.strip][0] = new TGraphErrors();
+        auto graph = fGraphEnergyFit[dss.det][dss.side][dss.strip][0];
+        TString graphName = Form("gr_%s",hist -> GetName());
+        TString f1Name = Form("f1_%s",hist -> GetName());
+        graph -> SetName(graphName);
+        fFitEnergy[dss.det][dss.side][dss.strip][0] = new TF1(f1Name,"pol1",hist->GetXaxis()->GetXmin(),hist->GetXaxis()->GetXmax());
         entries = hist -> GetEntries();
         a1 = 0;
         m1 = 0;
@@ -53,14 +51,16 @@ void run_energy_calibration(int run=-1, bool drawExample=true)
         if (entries<fEntriesCut)
         {
             e_warning << hist->GetName() << " entries = " << entries << endl;
-            tree -> Fill();
+            //FillC0Parameters(dss.det, dss.side, dss.strip, entries, a1, m1, s1, a2, m2, s2, g0);
+            FillC0Parameters(dss.det, dss.side, dss.strip, entries, 0, 0);
             continue;
         }
         auto numPeaks = spectrum -> Search(hist,5,"goff nodraw");
         double* xPeaks = spectrum -> GetPositionX();
-        if (numPeaks<fMaxPeaks) {
+        if (numPeaks<fNumGates) {
             e_warning << hist->GetName() << " #peaks =" << numPeaks << endl;
-            tree -> Fill();
+            //FillC0Parameters(dss.det, dss.side, dss.strip, entries, a1, m1, s1, a2, m2, s2, g0);
+            FillC0Parameters(dss.det, dss.side, dss.strip, entries, 0, 0);
             continue;
         }
         if (xPeaks[1]<xPeaks[0]) {
@@ -68,7 +68,7 @@ void run_energy_calibration(int run=-1, bool drawExample=true)
             xPeaks[1] = xPeaks[0];
             xPeaks[0] = xx;
         }
-        for (auto iPeak=0; iPeak<fMaxPeaks; ++iPeak)
+        for (auto iPeak=0; iPeak<fNumGates; ++iPeak)
         {
             double xPeak = xPeaks[iPeak];
             fitGaus -> SetRange(xPeak-5*xPeak*fExpectedResolution,xPeak+5*xPeak*fExpectedResolution);
@@ -82,9 +82,9 @@ void run_energy_calibration(int run=-1, bool drawExample=true)
             amp =   fitGaus -> GetParameter(0);
             mean =  fitGaus -> GetParameter(1);
             sigma = fitGaus -> GetParameter(2);
-            gausParameters[det][side][strip][iPeak][0] = amp;
-            gausParameters[det][side][strip][iPeak][1] = mean;
-            gausParameters[det][side][strip][iPeak][2] = sigma;
+            gausParameters[dss.det][dss.side][dss.strip][iPeak][0] = amp;
+            gausParameters[dss.det][dss.side][dss.strip][iPeak][1] = mean;
+            gausParameters[dss.det][dss.side][dss.strip][iPeak][2] = sigma;
             if (iPeak==0) {
                 a1 = amp;
                 m1 = mean;
@@ -96,23 +96,36 @@ void run_energy_calibration(int run=-1, bool drawExample=true)
                 s2 = sigma;
                 g0 = f241AmAlphaEnergy1/mean;
             }
+            graph -> SetPoint(graph->GetN(),  mean, fGateEnergy[iPeak]);
+            graph -> SetPointError(graph->GetN()-1,sigma,fGateEnergy[iPeak]*0.01);
         }
-        tree -> Fill();
-    }
-    fout -> cd();
-    tree -> Write();
-    fout -> Close();
-    cout << fC0ParFileName << endl;
 
+    lk_debug << endl;
+        auto f1 = fFitEnergy[dss.det][dss.side][dss.strip][0];
+        graph -> Fit(f1,"RQN0");
+        auto itcpt = f1 -> GetParameter(0);
+        auto slope = f1 -> GetParameter(1);
+        if (dss.det==12&&dss.strip==0) {
+            graph -> Print();
+            f1 -> Print();
+            graph -> Fit(f1,"N0");
+        }
+        //FillC0Parameters(dss.det, dss.side, dss.strip, entries, a1, m1, s1, a2, m2, s2, g0);
+        FillC0Parameters(dss.det, dss.side, dss.strip, entries, itcpt, slope);
+    }
+    EndWriteParameters();
+
+    lk_debug << endl;
     /////////////////////////////////////////////////////////////////////
     // 3) Draw examples
     /////////////////////////////////////////////////////////////////////
-    auto set = new LKDrawingSet();
-    auto group = set -> CreateGroup("energy");
+    auto group = top -> CreateGroup("energy");
+    auto group2 = top -> CreateGroup("Fit");
     //for (auto dssGroup : fExampleGroupArrayS)
     for (auto dssGroup : fAllGroupArrayS)
     {
-        auto sub = group -> CreateSubGroup(Form("%d",dssGroup.GetDet()));
+        auto sub = group -> CreateGroup(Form("%d",dssGroup.GetDet()));
+        auto sub2 = group2 -> CreateGroup(Form("%d",dssGroup.GetDet()));
         for (auto dss : dssGroup.array)
         {
             auto drawing = sub -> CreateDrawing("");
@@ -122,8 +135,8 @@ void run_energy_calibration(int run=-1, bool drawExample=true)
             auto lg = new TLegend(0.35,0.60,0.85,0.88);
             lg -> SetBorderSize(0);
             lg -> SetFillStyle(0);
-            lg -> SetNColumns(fMaxPeaks);
-            for (auto iPeak=0; iPeak<fMaxPeaks; ++iPeak)
+            lg -> SetNColumns(fNumGates);
+            for (auto iPeak=0; iPeak<fNumGates; ++iPeak)
             {
                 auto amp = gausParameters[dss.det][dss.side][dss.strip][iPeak][0];
                 auto mean = gausParameters[dss.det][dss.side][dss.strip][iPeak][1];
@@ -145,7 +158,20 @@ void run_energy_calibration(int run=-1, bool drawExample=true)
             //lg -> Draw();
             drawing -> Add(lg);
             //icvs++;
+lk_debug << endl;
+
+            auto drawing2 = sub2 -> CreateDrawing();
+            auto graph = fGraphEnergyFit[dss.det][dss.side][dss.strip][0];
+            graph -> SetMarkerStyle(20);
+            auto hist = fHistEnergy[dss.det][dss.side][dss.strip];
+            auto frame = new TH2D(graph->GetName(),Form("%s;Raw energy;Alpha energy",hist->GetTitle()),50,hist->GetXaxis()->GetXmin(),hist->GetXaxis()->GetXmax(),50,fBinE1,fBinE2);
+            drawing2 -> Add(frame);
+            drawing2 -> Add(graph,"pl");
+            drawing2 -> Add(fFitEnergy[dss.det][dss.side][dss.strip][0],"samel");
         }
     }
-    set -> Draw("viewer");
+
+    lk_debug << endl;
+    if (runViewer)
+        top -> Draw("viewer");
 }

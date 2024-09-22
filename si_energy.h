@@ -5,6 +5,8 @@ const double f241AmAlphaBranchingRatio2 = .128;
 const double f148GdAlphaEnergy = 3.1822;
 const double f148GdAlphaBranchingRatio = 1;
 
+const double fGateEnergy[] = {f148GdAlphaEnergy,f241AmAlphaEnergy1};
+
 double EvalX(Double_t *xy, Double_t *par)
 {
     double x = xy[0];
