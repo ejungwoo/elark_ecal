@@ -208,7 +208,7 @@ void make_histograms(bool runViewer=true, int calibration=0)
     /////////////////////////////////////////////////////////////////////
     // x) Draw examples
     /////////////////////////////////////////////////////////////////////
-    auto top = new LKDrawingGroup(Form("run_%d",fRun));
+    auto top = new LKDrawingGroup(Form("run_%04d_d%d",fRun,calibration));
     auto groupJ = top -> CreateGroup("HPJ");
     auto groupO = top -> CreateGroup("HPO");
     if (calibration==1) {

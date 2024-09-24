@@ -2,7 +2,7 @@
 
 void run_ballistic_correction(bool runViewer=true)
 {
-    auto top = new LKDrawingGroup(Form("run_%d",fRun));
+    auto top = new LKDrawingGroup(Form("run_%04d_ballistic",fRun));
     MakeRun();
 
     bool usingSymmetricFit = false;

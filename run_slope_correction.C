@@ -4,6 +4,7 @@ void run_slope_correction(bool runViewer=true)
 {
     MakeRun();
     auto top = new LKDrawingGroup(Form("run_%d",fRun));
+    auto top = new LKDrawingGroup(Form("run_%04d_slope",fRun));
 
     /////////////////////////////////////////////////////////////////////
     // 1) Get histograms

@@ -3,7 +3,7 @@
 void run_energy_calibration(bool runViewer=true)
 {
     MakeRun();
-    auto top = new LKDrawingGroup(Form("run_%d",fRun));
+    auto top = new LKDrawingGroup(Form("run_%04d_energy_calibration",fRun));
 
     /////////////////////////////////////////////////////////////////////
     // 1) Get histograms

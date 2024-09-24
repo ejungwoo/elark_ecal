@@ -503,7 +503,8 @@ TH2D* MakeHitPatternHist(int jo, TString calName, int nn, double e1, double e2) 
     hist -> GetXaxis() -> SetNdivisions(400+fNumDetectors);
     if (jo!=2) 
         hist -> GetXaxis() -> SetNdivisions(fNumDetectors);
-    hist -> GetXaxis() -> SetLabelSize(0.023);
+    //hist -> GetXaxis() -> SetLabelSize(0.023);
+    hist -> GetXaxis() -> SetLabelSize(0.030);
     for (auto det=0; det<fNumDetectors; ++det) {
         auto detector = fStark -> GetSiDetector(det);
         auto name = detector -> GetDetTypeName();
@@ -511,7 +512,10 @@ TH2D* MakeHitPatternHist(int jo, TString calName, int nn, double e1, double e2) 
         TString sring = "dE"; if (ring==1) sring = "E"; if (ring==2) sring = "16E";
         if (jo==0) hist -> GetXaxis() -> SetBinLabel(det*fNumJStrips+1,Form("%d (%s,%s)",det,name.Data(),sring.Data()));
         if (jo==1) hist -> GetXaxis() -> SetBinLabel(det*fNumOStrips+1,Form("%d (%s,%s)",det,name.Data(),sring.Data()));
-        if (jo==2) hist -> GetXaxis() -> SetBinLabel(det*1+1,Form("%d (%s,%s)",det,name.Data(),sring.Data()));
+        if (jo==2)  {
+            hist -> GetXaxis() -> SetBinLabel(det*1+1,Form("%d (%s,%s)",det,name.Data(),sring.Data()));
+            hist -> GetXaxis() -> ChangeLabel(det*1+1,270);
+        }
     }
     return hist;
 }
@@ -526,7 +530,8 @@ TH1D* MakeDet1DHist(int jo, TString calName)
     hist -> GetXaxis() -> SetNdivisions(400+fNumDetectors);
     if (jo!=2) 
         hist -> GetXaxis() -> SetNdivisions(fNumDetectors);
-    hist -> GetXaxis() -> SetLabelSize(0.023);
+    //hist -> GetXaxis() -> SetLabelSize(0.023);
+    hist -> GetXaxis() -> SetLabelSize(0.030);
     for (auto det=0; det<fNumDetectors; ++det) {
         auto detector = fStark -> GetSiDetector(det);
         auto name = detector -> GetDetTypeName();
@@ -534,6 +539,7 @@ TH1D* MakeDet1DHist(int jo, TString calName)
         TString sring = "dE"; if (ring==1) sring = "E"; if (ring==2) sring = "16E";
         if (jo==0) hist -> GetXaxis() -> SetBinLabel(det*fNumJStrips+1,Form("%d (%s,%s)",det,name.Data(),sring.Data()));
         if (jo==1) hist -> GetXaxis() -> SetBinLabel(det*fNumOStrips+1,Form("%d (%s,%s)",det,name.Data(),sring.Data()));
+        hist -> GetXaxis() -> ChangeLabel(det*fNumOStrips+1,90);
     }
     return hist;
 }

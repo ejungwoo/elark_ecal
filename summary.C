@@ -24,30 +24,31 @@ void detector_summary(int det=0, bool drawFigures=true);
 void get_parameters();
 void write_parameters();
 
-LKDrawingGroup* fTop;
-LKDrawingGroup* fGroupEE;
-LKDrawingGroup* fGroupEP;
-LKDrawingGroup* fGroupOthers;
-TH2D* fHistER[2];
-TH1D* fHistNE[2];
+LKDrawingGroup* fTop = nullptr;
+LKDrawingGroup* fGroupEE = nullptr;
+LKDrawingGroup* fGroupEP = nullptr;
+LKDrawingGroup* fGroupOthers = nullptr;
+TH2D* fHistER[2] = {0};
+TH1D* fHistNE[2] = {0};
 
 int fRun1, fRun2;
 
-void summary()
+void summary(bool readSave=false)
 {
     fRun1 = 199;
     fRun2 = 168;
 
-    TString nameSummary = Form("data/stark_%d_%d.summary.root",fRun1,fRun2);
-    if (true) {
+    TString nameSummary = Form("stark_%d_%d",fRun1,fRun2);
+    if (readSave) {
         fTop = new LKDrawingGroup(nameSummary);
         fTop -> Draw("v");
         return;
     }
 
-    fTop = new LKDrawingGroup("top");
-    TString calName = "c3_";
+    fTop = new LKDrawingGroup(Form("summary_%d_%d",fRun1,fRun2));
+    LKDrawing *drawing;
 
+    TString calName = "c3_";
     for (auto det=0; det<40; ++det)
         for (auto side=0; side<2; ++side)
             for (auto strip=0; strip<8; ++strip) {
@@ -141,7 +142,7 @@ void summary()
     for (auto jo : {0,1})
     {
         auto group = fTop -> CreateGroup(Form("HP%d",jo));
-        auto drawing = group -> CreateDrawing();
+        drawing = group -> CreateDrawing();
         drawing -> Add(histEnergyDetectorAll[jo]);
         auto x2 = (drawing->GetMainHist()) -> GetXaxis() -> GetXmax();
         auto line1 = new TLine(0,fGateEnergy[0],x2,fGateEnergy[0]);
@@ -153,40 +154,40 @@ void summary()
         drawing -> SetLogz();
     }
     fGroupOthers = fTop -> CreateGroup("Others");
-    fGroupEE = fTop -> CreateGroup("Energy");
-    fGroupEP = fTop -> CreateGroup("EvsP");
+    fGroupEE = fTop -> CreateGroup("Energy",true);
+    fGroupEP = fTop -> CreateGroup("EvsP",true);
 
     /////////////////////////////////////////////////////////////////////
     // 
     /////////////////////////////////////////////////////////////////////
 
-    fHistER[0] = (TH2D*) MakeHitPatternHist(2,"resolution0",50,0,10);
+    fHistER[0] = (TH2D*) MakeHitPatternHist(2,"resolution0",50,0,500);
     fHistER[0] -> SetTitle(Form("[%d,%d] Energy Resolution Junction",fRun1,fRun2));
-    fHistER[0] -> GetYaxis() -> SetTitle("energy resolution (sigma/mean) [%]");
-    fHistER[0] -> SetStats(0);
-    fGroupOthers -> AddHist(fHistER[0]);
+    fHistER[0] -> GetYaxis() -> SetTitle("FWHM [keV]");
 
-    fHistER[1] = (TH2D*) MakeHitPatternHist(2,"resolution1",50,0,10);
+    fHistER[1] = (TH2D*) MakeHitPatternHist(2,"resolution1",50,0,500);
     fHistER[1] -> SetTitle(Form("[%d,%d] Energy Resolution Ohmic",fRun1,fRun2));
-    fHistER[1] -> GetYaxis() -> SetTitle("energy resolution (sigma/mean) [%]");
-    fHistER[1] -> SetStats(0);
-    fGroupOthers -> AddHist(fHistER[1]);
+    fHistER[1] -> GetYaxis() -> SetTitle("FWHM [keV]");
 
     fHistNE[0] = (TH1D*) MakeDet1DHist(0,"mult0");
     fHistNE[0] -> SetTitle(Form("[%d,%d] Multiplicity Junction",fRun1,fRun2));
     fHistNE[0] -> GetYaxis() -> SetTitle("");
-    fHistNE[0] -> SetStats(0);
-    fGroupOthers -> AddHist(fHistNE[0]);
 
     fHistNE[1] = (TH1D*) MakeDet1DHist(1,"mult1");
     fHistNE[1] -> SetTitle(Form("[%d,%d] Multiplicity Ohmic",fRun1,fRun2));
     fHistNE[1] -> GetYaxis() -> SetTitle("");
-    fHistNE[1] -> SetStats(0);
-    fGroupOthers -> AddHist(fHistNE[1]);
 
-    for (auto det=0; det<40; ++det) {
-        detector_summary(det,false);
+    for (TH1* hist : {(TH1*)fHistER[0],(TH1*)fHistER[1],(TH1*)fHistNE[0],(TH1*)fHistNE[1]})
+    {
+        hist -> SetStats(0);
+        drawing = fGroupOthers -> CreateDrawing();
+        drawing -> Add(hist);
+        drawing -> SetBottomMargin(0.15);
+        hist -> GetXaxis() -> SetLabelSize(0.04);
     }
+
+    for (auto det=0; det<40; ++det)
+        detector_summary(det,false);
 
     write_parameters();
 
@@ -197,8 +198,10 @@ void summary()
     }
 
     fTop -> Draw("v");
+    fTop -> Write();
 
-    auto file = new TFile(nameSummary,"recreate");
+    //TString nameSummary = Form("data/%s.summary.root",nameSummary.Data());
+    //auto file = new TFile(nameSummary,"recreate");
     fTop -> Write();
     e_info << nameSummary << endl;
 }
@@ -298,7 +301,8 @@ void detector_summary(int det, bool drawFigures)
             auto fit = (TF1*) drawing -> FindObject(Form("fit%d",i));
             if (fit==nullptr) continue;
             auto resolution = 100*fit->GetParameter(2)/fit->GetParameter(1);
-            fEnergyResolutionArray[det][dss.side].push_back(resolution);
+            //fEnergyResolutionArray[det][dss.side].push_back(resolution);
+            fEnergyResolutionArray[det][dss.side].push_back(fit->GetParameter(2)*1000.*2.3);
         }
     }
 
@@ -318,7 +322,8 @@ void detector_summary(int det, bool drawFigures)
             auto fit = (TF1*) drawing -> FindObject(Form("fit%d",i));
             if (fit==nullptr) continue;
             auto resolution = 100*fit->GetParameter(2)/fit->GetParameter(1);
-            fEnergyResolutionArray[det][dss.side].push_back(resolution);
+            //fEnergyResolutionArray[det][dss.side].push_back(resolution);
+            fEnergyResolutionArray[det][dss.side].push_back(fit->GetParameter(2)*1000.*2.3);
         }
     }
 }

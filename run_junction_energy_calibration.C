@@ -3,7 +3,7 @@
 TString run_junction_energy_calibration(bool runViewer=true, int run=-1, int calRun=-1, TString inputName="")
 {
     MakeRun(run, ((calRun==199&&run==168)?1:-1));
-    auto top = new LKDrawingGroup(Form("run_%d",fRun));
+    auto top = new LKDrawingGroup(Form("run_%04d_energy_sum_calibration",fRun));
 
     /////////////////////////////////////////////////////////////////////
     // 1)
@@ -39,7 +39,7 @@ TString run_junction_energy_calibration(bool runViewer=true, int run=-1, int cal
     auto group = top -> CreateGroup("EPO");
     auto groupE = top -> CreateGroup("Energy");
     auto group0 = top -> CreateGroup("gate0",false);
-    auto group1 = top -> CreateGroup("gate1",true);
+    auto group1 = top -> CreateGroup("gate1",false);
 
     TString c3Name;
     if (inputName.IsNull()==false) {
@@ -47,7 +47,6 @@ TString run_junction_energy_calibration(bool runViewer=true, int run=-1, int cal
         c3Name.ReplaceAll("hist_c2","c3");
         c3Name.ReplaceAll(".root",".dat");
     }
-    //lk_debug << c3Name << endl; return "";
     StartWriteC3Parameters(c3Name);
     for (auto dssGroup : fAllGroupArrayR)
     {

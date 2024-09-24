@@ -3,7 +3,7 @@
 TString make_c2_histograms(bool runViewer=true, int calibration=2, int run=-1, int calRun=-1, bool checkEP=false, TString c3Name="")
 {
     MakeRun(run, ((calRun==199&&run==168)?1:-1));
-    auto top = new LKDrawingGroup(Form("run_%d",fRun));
+    auto top = new LKDrawingGroup(Form("run_%04d_d%d",fRun,calibration));
     auto groupJ = top -> CreateGroup("HPJ",!checkEP);
     auto groupO = top -> CreateGroup("HPO",!checkEP);
     auto groupFit = top -> CreateGroup("Fit");
